@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>概率模拟计算工具</title>
+    
+    <link href="css/mui.min.css" rel="stylesheet"/>
+	<link href="css/app.css" rel="stylesheet"/>
+</head>
+<body>
+	<div class="wrapper">
+		<!--刷新按钮-->
+		<a class="refresh" id='refresh'>刷新</a>
+		<!--左侧统计栏-->
+		<div class="statistics">
+			<!--累计投注次数-->
+			<div class="total_times">累计投注次数</br><span id='totalt'>0</span></div>
+			<!--命中率-->
+			<div class="hit_rate">命中率(%)</br><span id='hitRate'>NaN</span></div>
+
+		</div>
+		<!--右侧主仪盘-->
+		<div class="mainplatform">
+			<!--16次以上没中过的编号列表-->
+			<div class="unlucky" id='unlucky'>
+				 <div class="wu">暂无数据</div>
+			</div>
+			<!--模拟庄闲流水-->
+			<div class="running" id='desktop'>
+				请设置人数
+				<!--<span class="w"><span class="code">3</span><span id='sjzx'>庄</span></span>-->
+			</div>
+			<!--总数统计-->
+			<div class="total_area">
+				<div class="total_z">累计庄总数</br></br><span class="fbig" id='totalz'>**</span></div>
+				<div class="total_c"><span id='moreName'>**</span></br></br><span class="fbig" id='dvalue'>**</span></div>
+				<div class="total_x">累计闲总数</br></br><span class="fbig" id='totalx'>**</span></div>
+			</div>
+			<!--操作区-->
+			<div class="oper_area">
+				<a class="btn_set" id='setting'>设置</a>
+				<a class="btn_set" id='reset'>重置</a>
+				<a class="btn_set" id='zhsetting'>转换设置</a>
+				<a class="btn_set z" id='btnZ'>庄</a>
+				<!--<a class="btn_set" id='regret'>后悔</a>-->
+				<a class="btn_set x" id='btnX'>闲</a>
+			</div>
+
+		</div>
+	</div>
+	<!--loading框-->
+	<div class="loading">正在疯狂计算中，请稍后...</div>
+	<!--存储中转隐藏区-->
+	<div class="test mui-hidden">
+		<span>人数：</span>
+		<input type="text" id="personcount">
+		<span>初始值：</span>
+		<input type="text" id="initialValue" value="1">
+		<!--<span >最后两步结果(庄闲)存储：</span>
+		<input type="text" id="zxValue">-->
+		<span>本局庄的编号：</span>
+		<div id="zcode"></div>
+		<span>本局闲的编号：</span>
+		<div id="xcode"></div>
+		<span>牌情流水：</span>
+		<div id="relation"></div>
+		<span>判断设置人数是否改变(1是有变)：</span>
+		<div id="ischange"></div>
+		<!--<span>当前赢家：</span>
+		<div id="currentwinner"></div>-->
+		<!--<span>统计每个编号历次得分情况</span>
+		<div id='codescroe'>
+			<p id='code'></p>
+		</div>-->
+	</div>
+	<script src="js/mui.min.js"></script>
+	<script src="js/zepto.min.js"></script>
+    <script type="text/javascript" charset="utf-8">
+      	mui.init();
+      	mui.plusReady(function(){ 
+      		//保存累计投注数、命中率为应用本地数据
+      		function setItem(){
+				    var totalt = $("#totalt").text();
+				    var hitRate = $("#hitRate").text();
+				    plus.storage.setItem('totalt',totalt);
+				    plus.storage.setItem('hitRate',hitRate);
+			}
+      		//获取 累计投注数、命中率的本地存储的方法; 
+	  		function getItem(){
+	  			var savetotalt = plus.storage.getItem("totalt");
+	  			var savehitRate = plus.storage.getItem("hitRate");
+			    $("#totalt").text(savetotalt);
+			    $("#hitRate").text(savehitRate); 
+			}
+	  		//清除累计投注数、命中率的本地存储
+	  		function removeItem(){
+				plus.storage.removeItem("totalt");
+				plus.storage.removeItem("hitRate");
+			}
+	  		getItem();//调用累计投注数和命中率的本地存储方法;
+	  		var xian = document.getElementById('btnX');
+	  		var zhang = document.getElementById('btnZ');
+			xian.addEventListener('tap', function(event) {
+				setItem();//点闲保存或更新存储的数据
+			});
+			zhang.addEventListener('tap', function(event) {
+				setItem();//点庄保存或更新存储的数据
+			});
+			//刷新按钮
+      		$('#refresh').on('click',function(){
+      			removeItem();//清除本地存储
+      			window.location.reload();//刷新本页面      			
+      		})
+      	});
+
+      	$(function(){ 
+	  		////以下为按钮操作区间
+      		//设置按钮
+      		var pnTime = 0;//点击设置按钮的次数，初始值为0;
+      		$('#setting').on('click',function(e){      			
+      			pnTime = pnTime+1;//统计设置按钮的点击次数;
+      			var originvalue = $('#personcount').val();//人数的初始值
+      			mui.confirm( '设置人数前，请先设置转换设置，如已设置请点击继续','信息确认', ['去设置','继续'], function(e){
+			        if (e.index == 1){
+			        	mui.prompt('模拟人数','请输入非0人数','设置',['取消','确认'],function (e) {
+		      			    if(e.index==1){
+		      			    	var pn = $(".mui-popup-input input").val();
+		      			    	if(pn<1){
+		      			    		mui.toast('输入错误,请重新输入');//不允许输入1以下的人数;
+		      			    	}      			    	       			    	
+		      			    	if(pnTime>1){
+		      			    		if(pn!=originvalue){
+		      			    			$('#ischange').text(1);//判断设置人数与上次设置的人数是否有变化，做一个标识;
+		      			    			restartF();//
+			      			    	}else{
+			      			    		$('#ischange').text(0);
+			      			    	}
+		      			    	}
+		      			    	$('#personcount').val(pn);//输入的值存到人数的input里;
+		      			    }
+		      			},'div');
+		      			document.querySelector('.mui-popup-input input').type='number';//设置该输入框为数字类型
+			        }else{}
+      			});
+      			
+      			
+      			
+      			
+      			
+      			 
+      		});
+      		//转换设置按钮
+      		$('#zhsetting').on('click',function(){
+      			var times= parseInt($('#totalt').text()); //投注次数
+      			red0Append = '';   //red0局的数据清空
+      			//投注次数>=1时，才可以设置分数
+      			//if(times>=1){
+      				//mui.toast('游戏已开始，暂无法更改初始分数值');      				
+      			//}else{
+      				mui.prompt('设置初始值','请输入初始值,默认为1','设置',['取消','确认'],function (e) {
+      			    if(e.index==1){
+      			    	var origin = $(".mui-popup-input input").val();
+      			    	if(origin == ''||origin == 0){
+      			    		origin=1;//分数基础值默认为1
+      			    	}
+      			    	$('#initialValue').val(origin);//保存分数基础值
+      			    	//设置分数后立即更改， 当前的显示分数
+			      		var count = $('#personcount').val();//设置的人数
+			      		for(var i = 0; i < count; i++){					
+							inintF(i,origin);//设置基础分数后开始初始化所有编号分数				
+						};
+						reszxSum(); //更改基础分数后，获取庄、闲总分数      			
+						difference();//更改基础分数后，差值算法
+      			    }
+      				},'div');
+      				document.querySelector('.mui-popup-input input').type='number';//设置该输入框为数字类型
+      			//}      			 
+      		});
+      		//后悔一步
+      		//var regBtn == true;//点击反悔按钮的次数，初始值为0;
+      		$('#regret').on('click',function(){  
+      			//统计设置按钮的点击次数;
+      			mui.confirm('真的要反悔吗？','确认信息',['否','是'],function (e) {
+      				if(e.index==1){
+      					regretF(e);      					
+      				}
+      			},'div');
+      			
+      		});
+      		//重置按钮
+      		var reT = 0;//点击重置按钮次数初始值         		
+      		$('#reset').on('click',function(){
+      			red0Append = '';   //red0存储的数据清空
+				var personcount = parseInt($('#personcount').val());
+      			if(personcount>=500){
+      				$('.loading').css('display','block');
+      				setTimeout(function(){
+      					$('.loading').css('display','none');
+      				},2000)
+      				setTimeout(function(){
+      					resetbtn();
+      				},1);
+      			}else{
+      				resetbtn();
+      			}				
+      		});
+      		
+      		//按闲按钮      		
+      		$('#btnX').on('click',function(){
+      			mui.confirm('', '确定选择闲？', ['取消','确定'], function(e){
+			        if (e.index == 1){
+			            var personcount = parseInt($('#personcount').val());
+		      			if(personcount>=500){
+		      				$('.loading').css('display','block');
+		      				setTimeout(function(){
+		      					$('.loading').css('display','none');
+		      				},2000)
+		      				setTimeout(function(){
+		      					xbtn();
+		      				},1);
+		      			}else{
+		      				xbtn();
+		      			}
+			        }else{}
+    			});
+      		});
+      		
+      		//按庄按钮      		
+      		$('#btnZ').on('click',function(){
+      			mui.confirm('', '确定选择庄？', ['取消','确定'], function(e){
+      				 if (e.index == 1){
+      				 	var personcount = parseInt($('#personcount').val());
+		      			if(personcount>=500){
+		      				$('.loading').css('display','block');
+		      				setTimeout(function(){
+		      					$('.loading').css('display','none');
+		      				},2000)
+		      				setTimeout(function(){
+		      					zbtn();
+		      				},1);
+		      			}else{
+		      				zbtn();
+		      			}
+      				 }else{}
+      			});   			
+      		});
+      		
+      		
+      		////以下为算法区间 
+      		//点重置按钮合集
+      		var sjzxObj = {};
+      		var relationPrepend = '';
+      		var red0Append = '';
+      		var totalz = 0;  //庄总个数
+      		var totalx = 0;  //闲总个数
+      		function resetbtn(){
+      			reT =reT+1;//重置按钮点击次数统计
+      			var initialNum = $('#initialValue').val();
+      			var times= parseInt($('#totalt').text()); //投注次数
+      			var isChangeP = $('#ischange').text();      			
+      			//先清空测试区域以只保留最新的数据;
+      			$("#desktop").empty();
+      			$('#xcode').empty();
+      			$('#zcode').empty();
+				//根据模拟人数出牌
+	      		var count = $('#personcount').val();
+				totalz = totalx = 0;
+				var zcodeTextArray = [];
+				var xcodeTextArray = [];
+				var allSeats = '';
+				var seats = '<span><span class="code">{i}</span><span id="sjzx">{text}</span><span id="wager{i}">{wager}</span></span>';
+				var Random;
+				var text;
+				var wager;			
+	      		for(var i = 0; i < count; i++){
+					Random = Math.random();//0-1之间的随机数;
+					if(Random < 0.5){
+						text = '庄';//此条件下为庄
+						totalz++;      				 
+						zcodeTextArray.push(i);
+					}else{
+						text = '闲';
+						totalx++;      				
+						xcodeTextArray.push(i);
+					}
+					//Randomzx(i);//随机出牌函数
+					//reT代表点重置按钮的次数;xbtnT代表点闲按钮的次数;zbtnT代表点庄按钮的次数;
+					wager = 1;
+					if((reT==1&&xbtnT==0&&zbtnT==0) || isChangeP==1){
+						wager = initialNum;//获取初始值的方法;//当人数发生变化时视为重新开始获取初始值
+						/*relationPrepend = '';
+						relationPrepend += '<span class="red0"></span><br>';
+	      				red0Append += i+':'+initialNum+';';	*/      				
+					}
+					sjzxObj[i] = text;    //存储桌号庄闲情况						
+					allSeats += seats.replace('{i}', i).replace('wager{i}', 'wager'+i).replace('{text}', text).replace('{wager}', wager);						      			      			      			
+	      		}		      		
+				$('#zcode').html(zcodeTextArray.join(','));
+				$('#xcode').html(xcodeTextArray.join(','));
+				$("#desktop").append(allSeats);
+				$('#relation').prepend(relationPrepend);
+				$('.red0').append(red0Append);
+				if(times>=1){
+					resSscoreF();//投注次数大于等于1时，点击重置获取相应分数				
+				}
+				//人数改变时
+				if(isChangeP==1){					
+					resSscoreF();	//点击重置获取相应分数				
+				}
+				//人数没有改变时
+				if(isChangeP==0){
+					relationPrepend = '';
+				}
+				reszxSum(); //点击重置时获取庄、闲总分数      			
+				difference();//点击重置时的差值算法
+      		};
+      		
+      		//点闲按钮时功能集合
+      		var xbtnT = 0;
+      		var mNtext = $('#moreName').text(); //获取差值显示的是庄/闲
+      		function xbtn(){
+      			xbtnT = xbtnT+1;//点击闲按钮的次数，点一次加1;
+				startCount();//计数投注总数
+				//当差值上边为闲时说明闲多，算命中一次;
+				if(mNtext=='闲'){
+					hit();
+				};
+				hitRate(hittimes); //计算命中率
+      			//stringR();
+      			xcalc();//结果为闲时各个编号注数统计
+      			$('.times').before('<span>选择:庄</span></br>');	
+      		}
+      		//点庄按钮时功能集合
+      		var zbtnT = 0;
+      		function zbtn(){
+      			zbtnT = zbtnT+1;
+				startCount();//计数投注总数
+				if(mNtext=='庄'){
+					hit();
+				};
+				hitRate(hittimes);//计算命中率
+      			//stringR();
+      			zcalc();//结果为庄时各个编号注数统计
+      			$('.times').before('<span>选择:闲</span></br>');   
+      		}  
+      		
+      		//庄闲总数差值
+      		function difference(){
+      			var z = $("#totalz").text();
+      			var x = $("#totalx").text();
+      			var moreName = $('#moreName');
+      			if(parseFloat(z) > parseFloat(x)){
+      				var dz = z-x;
+      				moreName.text('庄');
+      				$('#dvalue').text(dz.toFixed(2));  //保留2位小数
+      			}else if(parseFloat(z) < parseFloat(x)){
+      				var dx = x-z;
+      				moreName.text('闲');
+      				$('#dvalue').text(dx.toFixed(2));  //保留2位小数
+      			}else{
+      				moreName.text('差值');
+      				$('#dvalue').text(0);
+      			}
+      		};
+      		//累计投注次数统计
+      		var num=0;
+			function startCount() {							    
+			    num=num+1;
+			    $('#totalt').text(num);
+			};
+			//命中率
+			var hittimes =0;
+			function hit(){
+				hittimes = hittimes+1;
+			};
+			function hitRate(e){
+				var totalz = $('#totalt').text();				
+				var hitrate = (e/totalz)*100;
+				//Math.floor(hitrate)这是去掉小数点保留整数，Math.round(hitrate)这是四舍五入的整数
+				$('#hitRate').text(hitrate.toFixed(2));//.toFixed(2)保留小数点后两位
+			};			
+			//后悔
+			// 存储最后2步操作
+			var regretbtn = [];     //数组[1],获取上一步操作 			
+			function lastClickF(){
+				var regretArrL = regretbtn.length;
+				if(regretArrL>2){
+					regretbtn.splice(0,regretArrL-2,[]);
+				}else{
+					if(regretArrL==1){
+						regretbtn.splice(0,regretArrL);
+					}
+					if(regretArrL==2){
+						regretbtn.pop();						
+					}					
+				} 
+				$('#zxValue').val(regretbtn);
+			};			
+			//后悔方法
+			function regretF(e){				
+				if(num == 0){
+					return false;
+				}
+				if(num>0){
+					$('.red'+num).remove();
+				}
+				num=num-1;
+				if(num<=0){
+					num = 0;					
+				}
+				$('#totalt').text(num);
+				hittimes = hittimes-1;
+				if(hittimes<=0){
+					hittimes = 0;
+				}								
+				var hitrate = (hittimes/num)*100;
+				//Math.floor(hitrate)这是去掉小数点保留整数，Math.round(hitrate)这是四舍五入的整数
+				$('#hitRate').text(hitrate.toFixed(2));
+				if(hitrate=''){
+					hitrate==0;
+				}
+				lastClickF();   //存储最后2步操作
+				resSscoreF();    //后悔操作后的，分数显示								
+				reszxSum();    //后悔操作后的，庄闲总分数显示
+				difference(); //后悔操作后的，差值算法
+			};			
+      		//输家翻倍
+      		function winner(i){
+      			/*var redTime = '';
+      			var times= parseInt($('#totalt').text()); 
+      			for(var win=0;win<userId.length;win++){
+	      			if(userId[win]==i){	      					
+	      				for(var ws=0;ws<idScore.length;ws++){	      						       						
+	      					$("#"+"wager"+i).text(idScore[win]*2);      					
+	      				} 
+	      				redTime += i+':'+idScore[win]*2+';';
+	      				$('.red'+times).append(redTime);      					      							
+	      			}
+      			}  */
+      			var wagerT = Number($("#"+"wager"+i).text());
+      			$("#"+"wager"+i).text(wagerT*2);
+      		};      		
+      		//赢家回到起点      		
+      		function loser(i){
+      			var redTime = '';
+      			var times= parseInt($('#totalt').text());
+      			var initialValue = $('#initialValue').val();
+      			$("#"+"wager"+i).text(initialValue);
+      			//redTime += i+':'+initialValue+';';
+      			//$('.red'+times).append(i+':'+initialValue+';');
+      		};
+      		//点闲时每个编号的当前下的注数
+      		function xcalc(){
+      			var times= parseInt($('#totalt').text());
+      			//$('#relation').append('<span class="red'+times+'"></span><br>');     			
+      			//获取闲的编号将字符串转为数组
+      			var ax = $('#xcode').text();
+      			var aax = ax.split(",");// 在每个逗号(,)处进行分解。
+      			for(var i=0;i<aax.length;i++){
+      				var Number = aax[i];
+      				loser(Number);   //赢家回到起点				 	      								 	
+				}
+      			var az = $('#zcode').text();
+      			var aaz = az.split(",");// 在每个逗号(,)处进行分解。
+      			for(var i=0;i<aaz.length;i++){
+      				var Number = aaz[i];
+				 	winner(Number);	//输家翻倍
+				 	loserest(Number);//输家-16次列表
+				}      			
+      			xscoreSum(aax.length) //获取庄总分
+      			difference();//差值算法
+      		};
+      		//点庄时每个编号的当前下的注数
+      		function zcalc(){
+      			var times= parseInt($('#totalt').text());
+      			//$('#relation').append('<span class="red'+times+'"></span><br>');
+      			//获取闲的编号将字符串转为数组
+      			var ax = $('#xcode').text();
+				var aax = ax.split(",");// 在每个逗号(,)处进行分解。
+				for(var i=0;i<aax.length;i++){
+      				var Number = aax[i];
+				 	winner(Number);	//输家翻倍
+				 	loserest(Number);//输家-16次列表
+				}
+      			var az = $('#zcode').text();
+      			var aaz = az.split(",");// 在每个逗号(,)处进行分解。
+      			for(var i=0;i<aaz.length;i++){
+      				var Number = aaz[i];      				
+				 	loser(Number);   //赢家回到几点				 	
+				}
+      			zscoreSum(aaz.length) //获取闲总分
+      			difference();//差值算法
+      		};      		
+      		//当人数不变时重置时保留上次下注数，这样做是为了让他在这个基础之上翻倍
+      		function Lastbet(i){
+      			var ischange = Number($('#ischange').text());
+      			if(ischange != 1){
+      				var wagervalue = Number($("#"+"wager"+i).text()); 
+      				$("#"+"wager"+i).text(wagervalue);
+      			}else{
+      				$("#"+"wager"+i).text(1);
+      			}      			
+      		};     		
+      		//截取本局的id号数组,得分数组          		
+      		var userId = [];
+    		var idScore = [];
+      		function stringR(){ 
+      			/*if($('#totalt').text() ==0){
+	      			var str = $('.red'+beftime).text(); 
+      			}*/
+      			if($('#totalt').text()>=1){
+      				var times= parseInt($('#totalt').text());
+      				//var beftime = times-1;       				
+      				var str = $('.red0').text(); 
+      			}
+      			//把字符串分成编号数组、分数数组
+      			var subs = str.split(/;/); 
+	    		userId.splice(0,userId.length);
+	    		idScore.splice(0,idScore.length);
+	    		for(var k = 0; k<subs.length;k++){
+	    			userId.push(subs[k].split(':')[0]);
+	    			idScore.push(subs[k].split(':')[1]);    				
+	    		}
+	    		userId.pop();
+	    		idScore.pop();	    				    			      			    			
+			};     		
+      		//初始值
+      		function inintF(i,initialNum){       				      			      			      			
+      			/*$('.red0').text('');  //red0的数据清空
+      			relationPrepend = '';
+	      		 red0Append += i+':'+initialNum+';';
+	      		 $('.red0').append(red0Append);*/
+	      		 $("#"+"wager"+i).text(initialNum);
+      		};      		
+      		//人数改变时，所有数据清零
+      		function restartF(){
+      			totalz = 0;   //累计庄总数
+      			totalx = 0;   //累计闲总数
+      			num = 0;    //累计投注数
+      			var initialValue = $('#initialValue').val();
+      			var resTotalt = $('#totalt').text(num);
+      			var resHitRate =$('#hitRate').text('0');      			
+      			var resTotalz =$('#totalz').text(totalz);
+      			var resTotalx = $('#totalx').text(totalx);
+      			var resMoreName = $('#moreName').text('**');
+      			var resDvalue =$('#dvalue').text('0');     			
+      			$('#relation').empty();
+      		};      		      		      		
+      		//重置时获取分数  
+      		var resId = [];
+      		var resScore = [];
+      		function resSscoreF(){      			
+      			var times= $('#totalt').text();
+      			var str = $('.red'+times).text();
+	    		var subs = str.split(';'); 
+	    		resId.splice(0,resId.length);
+	    		resScore.splice(0,resScore.length);
+	    		for(var k = 0; k<subs.length;k++){
+	    			resId.push(subs[k].split(':')[0]);
+	    			resScore.push(subs[k].split(':')[1]);    				
+	    		}
+	    		resId.pop();
+	    		resScore.pop();
+	    		for(var res=0;res<resId.length;res++){
+	      			for(var resS=0;resS<resScore.length;resS++){      						
+	      				$("#"+"wager"+resId[res]).text(resScore[res]);		      						
+	      			}      					      		
+      			}		
+      		};      		
+      		//连续16次输的编号
+      		function loserest(id){
+      			var ischange = Number($("#ischange").text());
+      			if(ischange!=1){
+      				var initialNum = $('#initialValue').val();  //初始分数
+	      			var Num = parseInt($('#totalt').text());
+	      			if(Num>=16){	      			
+	      				var currentscroe  = Number($('#'+'wager'+id).text())/initialNum;
+						var resultT =  Math.log(currentscroe)/Math.LN2;	
+						var fbTime = parseInt(resultT);
+						if(fbTime==16){
+							var list ='<div class="unlucky_box" id="unlucky_box'+id+'"><span>编号:'+id+'</span></br><span class="times">次数:'+resultT+'次</span></div>';
+						     $('#unlucky').append(list);
+						     $('.wu').css('display','none');
+						}
+						if(fbTime>16){
+							$('#unlucky_box'+id+'').remove();
+							var list ='<div class="unlucky_box" id="unlucky_box'+id+'"><span>编号:'+id+'</span></br><span class="times">次数:'+resultT+'次</span></div>';
+							$('#unlucky').append(list);
+						}								
+						if(fbTime<16){
+							$('#unlucky').empty();
+						}
+	      			}
+      			}
+      		};     	      		
+      		//获取每一局的总分数  
+      		var scoreSum = 0;
+      		function scorezSum(){      			
+      			/*var mscore = [];
+      			var wtime =$('#totalt').text(); //点击次数
+      			var str = $('.red'+wtime).text();       			
+      			var subs = str.split(/;/); 
+	    		mscore.splice(0,mscore.length);
+	    		for(var k = 0; k<subs.length;k++){
+	    			mscore.push(subs[k].split(':')[1]);    				
+	    		}
+	    		mscore.pop();  //当局分数数组
+	      		for(var ws=0;ws<mscore.length;ws++){
+	      			scoreSum = scoreSum+ Number(mscore[ws]);		
+	      		}*/
+	      		
+	      		//获取当局总分数
+	      		var count = $('#personcount').val();//设置的人数
+			    for(var i = 0; i < count; i++){					
+					var wagerT = Number($("#"+"wager"+i).text());
+					scoreSum = scoreSum+wagerT;
+					console.log(wagerT);
+				};	      		
+      		};
+      		var zScoreSum = 0;
+      		var xScoreSum = 0;
+      		//点击庄获得闲总分
+      		function zscoreSum(totz){
+      			scorezSum();
+      			var initialValue = Number($('#initialValue').val()); 
+      			var zScore = totz*initialValue;
+      			console.log(scoreSum);
+      			xScoreSum = scoreSum-zScore;
+      			$('#totalx').text(xScoreSum.toFixed(2));
+      			$('#totalz').text(zScore.toFixed(2));
+      			scoreSum = 0;
+      		};
+      		//点击闲获得庄总分
+      		function xscoreSum(totx){
+      			scorezSum();
+      			var initialValue = Number($('#initialValue').val());
+      			var xScore =totx*initialValue;
+      			zScoreSum = scoreSum-xScore;
+      			$('#totalz').text(zScoreSum.toFixed(2));
+      			$('#totalx').text(xScore.toFixed(2));
+      			scoreSum = 0;
+      		};
+      		//点击重置按钮,需要调用的重置获取庄,闲总分数
+      		function reszxSum(){
+      			var initialNum = $('#initialValue').val();  //初始分数
+      			//获取存储的，当局庄、闲编号
+				zScoreSum = 0;
+      		    xScoreSum = 0;
+				var az = $('#zcode').text();
+      			var azArr = az.split(",");//转换为庄的数组
+      			var ax = $('#xcode').text();
+      			var axArr = ax.split(",");//转换为闲的数组
+      			//azArr.pop();//以上方法转换数组时最后边为生成一个空的数据，在这给删除了
+      			//axArr.pop();//以上方法转换数组时最后边为生成一个空的数据，在这给删除了
+      			//点击重置未点击庄、闲按钮前的庄、闲总分数
+				if(reT==1&&xbtnT==0&&zbtnT==0){
+					//重置操作后，庄闲总分数的初始值
+					var initZ= azArr.length*initialNum;
+					var initx= axArr.length*initialNum;
+					$('#totalz').text(initZ.toFixed(2)); //结果保留2位小数
+					$('#totalx').text(initx.toFixed(2));
+      			}
+				//重置时获取相应的庄、闲总分数
+      			if(azArr.length == 0){
+      				$('#totalz').text('0');
+      			}else{
+      				for(var k = 0; k<azArr.length;k++){
+      					reszSum(azArr[k]);      				
+      				}	
+      			}
+      			if(axArr.length == 0){
+      				$('#totalx').text('0');
+      			}else{
+      				for(var j = 0; j<axArr.length;j++){
+      					resxSum(axArr[j]);
+      				}
+      			}
+      		};     		      		      		
+      		//重置获取庄总分
+      		function reszSum(zId){
+      			var penN = resId.length;
+      			for(var res=0;res<resId.length;res++){
+      				if(resId[res] == zId){
+		      			for(var resS=0;resS<resScore.length;resS++){	
+		      				zScoreSum = zScoreSum+Number(resScore[res]);
+		      			} 
+		      			var zSum = zScoreSum/penN 
+		      			$('#totalz').text(zSum.toFixed(2));
+	      			}
+      			}      			
+      		};
+      		//重置获取闲总分
+      		function resxSum(xId){
+      			var penN = resId.length;
+      			for(var res=0;res<resId.length;res++){
+	      			if(resId[res] == xId){
+	      				for(var resS=0;resS<resScore.length;resS++){
+		      				xScoreSum = xScoreSum+Number(resScore[res]);	      						
+		      			}
+	      				var xSum = xScoreSum/penN;
+	      				$('#totalx').text(xSum.toFixed(2));
+	      			}	      			      					      		
+      			}      			
+      		};
+      	});
+    </script>	
+</body>
+</html>

@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>概率模拟计算工具</title>
+    
+    <link href="css/mui.min.css" rel="stylesheet"/>
+	<link href="css/app.css" rel="stylesheet"/>
+</head>
+<body>
+	<div class="wrapper">
+		<!--刷新按钮-->
+		<a class="refresh" id='refresh'>刷新</a>
+		<!--左侧统计栏-->
+		<div class="statistics">
+			<!--累计投注次数-->
+			<div class="total_times">累计投注次数</br><span id='totalt'>0</span></div>
+			<!--命中率-->
+			<div class="hit_rate">命中率(%)</br><span id='hitRate'>NaN</span></div>
+
+		</div>
+		<!--右侧主仪盘-->
+		<div class="mainplatform">
+			<!--16次以上没中过的编号列表-->
+			<div class="unlucky" id='unlucky'>
+				 <div class="wu">暂无数据</div>
+			</div>
+			<!--模拟庄闲流水-->
+			<div class="running" id='desktop'>
+				请设置人数
+				<!--<span class="w"><span class="code">3</span><span id='sjzx'>庄</span></span>-->
+			</div>
+			<!--总数统计-->
+			<div class="total_area">
+				<div class="total_z"><span class="red">累计庄总数</span></br></br><span class="fbig" id='totalz'>**</span></div>
+				<div class="total_c"><span id='moreName'>**</span></br></br><span class="fbig" id='dvalue'>**</span></div>
+				<div class="total_x"><span class="blue">累计闲总数</span></br></br><span class="fbig" id='totalx'>**</span></div>
+			</div>
+			<!--操作区-->
+			<div class="oper_area">
+				<a class="btn_set" id='setting'>设置</a>
+				<a class="btn_set" id='reset'>重置</a>
+				<a class="btn_set" id='zhsetting'>转换设置</a>
+				<a class="btn_set z" id='btnZ'>庄</a>
+				<!--<a class="btn_set" id='regret'>后悔</a>-->
+				<a class="btn_set x" id='btnX'>闲</a>
+			</div>
+
+		</div>
+	</div>
+	<!--loading框-->
+	<div class="loading">疯狂计算中，请稍后...</div>
+	<!--存储中转隐藏区-->
+	<div class="test mui-hidden">
+		<span>人数：</span>
+		<input type="text" id="personcount">
+	</div>
+	<script src="js/mui.min.js"></script>
+	<script src="js/zepto.min.js"></script>
+    <script type="text/javascript" charset="utf-8">
+      	mui.init();      	
+      	$(function(){ 
+      		//全局变量
+      		var initialValue = 1;
+      		var totalt = 0;
+      		var personcount ='';//默认人数为空
+      		var pnTime = 0;//点击设置按钮的次数，初始值为0;
+      		var reT = 0;//点击重置按钮次数初始值   
+			var scoreSum;
+      		var zScoreSum;
+      		var xScoreSum;
+      		var Obj = {};
+      		var zxObj = {};
+      		var scroearray = [];
+      		//设置按钮  
+      		mui(".oper_area").on('tap','#setting',function(){
+      		//$('#setting').on('click',function(e){      			
+      			pnTime = pnTime+1;//统计设置按钮的点击次数;
+      			var originvalue = personcount;//人数的初始值
+      			mui.confirm('设置人数前，请先设置《转换设置》，如已设置或要分数初始值为1请点击继续','信息确认', ['去设置','继续'], function(e){
+			        if (e.index == 1){
+			        	mui.prompt('模拟人数','请输入非0人数','设置',['取消','确认'],function (e) {
+		      			    if(e.index==1){
+		      			    	pn = $(".mui-popup-input input").val();
+		      			    	
+		      			    	if(pn<1){
+		      			    		mui.toast('输入错误【不允许输入1以下的人数】,请重新输入');//不允许输入1以下的人数;
+		      			    	}      			    	       			    	
+		      			    	if(pnTime>1){		      			    		
+		      			    		if(pn!=originvalue){
+		      			    			$('#personcount').val(pn);
+		      			    			mui.toast('检测到您输入与上次不同，我们视为新一轮模拟，所有数据将清空');
+		      			    			setTimeout(function(){
+		      			    				restartF();//清空所有数据操作 
+		      			    			},2000);
+		      			    			personcount = $('#personcount').val();
+			      			    	}
+		      			    	}
+		      			    	personcount = pn;
+		      			    }
+		      			},'div');
+		      			document.querySelector('.mui-popup-input input').type='number';//设置该输入框为数字类型
+			        }else{}
+      			});
+	 
+      		});
+      		//转换设置按钮
+      		mui(".oper_area").on('tap','#zhsetting',function(){
+      		//$('#zhsetting').on('click',function(){
+      			//投注次数>=1时，才可以设置分数
+      			if(reT>=1){
+      				mui.toast('游戏已开始，暂无法更改初始分数值');      				
+      			}else{
+      				mui.prompt('设置初始值','请输入初始值,默认为1','设置',['取消','确认'],function (e) {
+      			    if(e.index==1){
+      			    	var origin = $(".mui-popup-input input").val();
+      			    	if(origin == ''||origin == 0){
+      			    		origin=1;//分数基础值默认为1      			    		
+      			    	}
+      			    	initialValue = parseFloat(origin);//分数基础值的全局变量
+      			    }
+      				},'div');
+      				document.querySelector('.mui-popup-input input').type='number';//设置该输入框为数字类型
+      			}      			 
+      		});
+
+      		//重置按钮 
+      		mui(".oper_area").on('tap','#reset',function(){
+      		//$('#reset').on('click',function(){
+				if(personcount>0){
+					if(personcount>1000){
+						mui.confirm('确认要重置吗？','信息确认',['取消','确认'],function (e) {
+							if (e.index == 1){
+								$('.loading').css('display','block');
+			      				setTimeout(function(){
+			      					$('.loading').css('display','none');
+			      				},10)
+			      				setTimeout(function(){
+			      					resetbtn();
+			      				},1);
+							}
+						})
+	      				
+	      			}else{
+	      				resetbtn();
+	      			}
+				}else{
+					mui.toast('请设置模拟人数');
+				}
+      		});
+      		
+      		//按闲按钮 
+      		mui(".oper_area").on('tap','#btnX',function(){
+      		//$('#btnX').on('click',function(){
+      			mui.confirm('确定选择闲？', '信息确认', ['取消','确定'], function(e){
+			        if (e.index == 1){
+			        	if(reT<1){
+			        		mui.toast('请按重置随机出庄闲并分配编号');
+			        	}else{
+			      			if(personcount>500){
+			      				$('.loading').css('display','block');
+			      				setTimeout(function(){
+			      					$('.loading').css('display','none');
+			      				},10)
+			      				setTimeout(function(){
+			      					xbtn();
+			      				},1);
+			      			}else{
+			      				xbtn();
+			      			}	
+			        	}
+
+			        }
+    			});
+      		});
+      		
+      		//按庄按钮 
+      		mui(".oper_area").on('tap','#btnZ',function(){
+      		//$('#btnZ').on('click',function(){
+      			mui.confirm('确定选择庄？', '信息确认', ['取消','确定'], function(e){
+      				 if (e.index == 1){
+      				 	if(reT<1){
+			        		mui.toast('请按重置随机出庄闲并分配编号');
+			        	}else{
+	      				 	//var personcount = parseInt($('#personcount').val());
+			      			if(personcount>500){
+			      				$('.loading').css('display','block');
+			      				setTimeout(function(){
+			      					$('.loading').css('display','none');
+			      				},10)
+			      				setTimeout(function(){
+			      					zbtn();
+			      				},1);
+			      			}else{
+			      				zbtn();
+			      			}
+			      		}
+      				 };
+      			});   			
+      		});
+      		
+      		
+      		////以下为算法区间 
+      		//点重置按钮合集
+      		function resetbtn(){
+      			reT =reT+1;//重置按钮点击次数统计    			
+      			//先清空测试区域以只保留最新的数据;
+      			$("#desktop").empty();
+				//根据模拟人数出牌
+	      		var count = personcount;
+				totalz = totalx = 0;
+				zcodeTextArray = [];
+				xcodeTextArray = [];
+				var allSeats = '';
+				var allSeatsplus = '';
+				var allSeatsdoubleplus = '';
+				var seats = '<i><i class="code">{i}</i><i id="sjzx{i}" class="{color}">{textzx}</i><i id="wager{i}">{wager}</i></i>';
+				var Random;
+				var textzx;
+				var color;
+				var wager;
+	      		for(var i = 0; i < count; i++){
+					Random = Math.random();//0-1之间的随机数;
+					if(Random < 0.5){
+						textzx = '庄';//此条件下为庄
+						color = 'red';
+						//totalz++;      				 
+						zcodeTextArray.push(i);
+						zxObj[i]=0;
+						//console.log(Obj[i+'O']);
+					}else{
+						textzx = '闲';
+						color = 'blue';
+						//totalx++;      				
+						xcodeTextArray.push(i);
+						zxObj[i]=1;
+						//console.log(Obj[i+'O']);
+					}
+					//reT代表点重置按钮的次数;xbtnT代表点闲按钮的次数;zbtnT代表点庄按钮的次数;
+					wager = 1;
+					if(reT==1&&xbtnT==0&&zbtnT==0){
+						wager = initialValue;//获取初始值的方法;
+						Obj[i] = initialValue;
+						var initzscoresum = zcodeTextArray.length*initialValue;
+						var initxscoresum = xcodeTextArray.length*initialValue;
+						$('#totalz').text(initzscoresum.toFixed(2));
+						$('#totalx').text(initxscoresum.toFixed(2));
+					}
+					if(i<201){
+						allSeats += seats.replace('{i}', i).replace('{color}',color).replace('wager{i}','wager'+i).replace('sjzx{i}','sjzx'+i).replace('{textzx}', textzx).replace('{wager}', Obj[i]);						
+					}/*else if(i>=201&&i<1001){						
+						allSeatsplus += seats.replace('{i}', i).replace('wager{i}','wager'+i).replace('sjzx{i}','sjzx'+i).replace('{textzx}', textzx).replace('{wager}', Obj[i]);
+					}else if(i>=1001){
+						allSeatsdoubleplus += seats.replace('{i}', i).replace('wager{i}','wager'+i).replace('sjzx{i}','sjzx'+i).replace('{textzx}', textzx).replace('{wager}', Obj[i]);
+					}*/
+
+				}
+				$("#desktop").append(allSeats);
+				if(count>200){
+					var moretext ='<button id="morelists">点击查看200到1000</button>'
+					$("#desktop").append(moretext);
+				}
+
+				//if(count>=1000){
+					//var moretext ='<button id="morelists">点击查看200到1000</button>'
+					//var moretextplus ='<button id="morelistsplus">点击查看1000以上</button>'
+					//$("#desktop").append(moretext);										
+//					$('#morelists').on('click',function(){
+//						$('#morelists').attr({"disabled":"disabled"});
+//						$("#desktop").append(allSeatsplus);						
+//						$('.loading').css('display','block');
+//	      				setTimeout(function(){
+//	      					$('.loading').css('display','none');
+//	      				},10)
+//	      				$("#desktop").append(moretextplus);
+//					});
+//					$('#morelistsplus').live('click',function(){
+//						$('#morelistsplus').attr({"disabled":"disabled"});
+//						$("#desktop").append(allSeatsdoubleplus);
+//						$('.loading').css('display','block');
+//	      				setTimeout(function(){
+//	      					$('.loading').css('display','none');
+//	      				},10)
+//					});
+					
+				//}else if(count>200&&count<1000){
+					//var moretext ='<a id="morelists">点击查看更多</a>'
+					//$("#desktop").append(moretext);
+//					$('#morelists').on('click',function(){
+//						$("#desktop").append(allSeatsplus);
+//						$('.loading').css('display','block');
+//	      				setTimeout(function(){
+//	      					$('.loading').css('display','none');
+//	      				},10)
+//					});
+				//}				
+				if(reT>=2){
+					reszxSum(); //点击重置时获取庄、闲总分数     
+				}				 			
+				difference();//差值算法
+				$("#morelists").removeAttr("disabled");//将按钮可用
+    			$("#morelistsplus").removeAttr("disabled");//将按钮可用    			
+      			$('#morelistsplus').nextAll().remove();
+      			$('#morelists').nextAll().remove();
+      			//console.log(zxObj);
+      		};
+			//重置外移功能								
+			$('#morelists').live('click',function(){
+				
+				$('#morelists').attr({"disabled":"disabled"});
+				//添加编号
+				var color;
+				var count = personcount;
+				var allSeatsplus = '';
+				var moretextplus ='<button id="morelistsplus">点击查看1000以上</button>'
+				//var allSeatsdoubleplus = '';
+				var seats = '<i><i class="code">{i}</i><i id="sjzx{i}" class="{color}">{textzx}</i><i id="wager{i}">{wager}</i></i>';
+				for(var i = 0; i < count; i++){
+					var textzx;
+					if(zxObj[i]==0){
+						textzx='庄';
+						color = 'red';
+					}else if(zxObj[i]==1){
+						textzx='闲';
+						color = 'blue';
+					}					
+					if(i>=201&&i<1001){						
+						allSeatsplus += seats.replace('{i}', i).replace('{color}',color).replace('wager{i}','wager'+i).replace('sjzx{i}','sjzx'+i).replace('{textzx}', textzx).replace('{wager}', Obj[i]);
+					}	
+				}
+				$("#desktop").append(allSeatsplus);								
+				$('.loading').css('display','block');
+  				setTimeout(function(){
+  					$('.loading').css('display','none');
+  				},10);
+  				if(count>=1000){
+					$("#desktop").append(moretextplus);
+				}
+  				
+			});
+			$('#morelistsplus').live('click',function(){
+				$('#morelistsplus').attr({"disabled":"disabled"});
+				var color;
+				var count = personcount;
+				var allSeatsdoubleplus = '';
+				var seats = '<i><i class="code">{i}</i><i id="sjzx{i}" class="{color}">{textzx}</i><i id="wager{i}">{wager}</i></i>';
+				for(var i = 0; i < count; i++){
+					var textzx;
+					if(zxObj[i]==0){
+						textzx='庄';
+						color = 'red';
+					}else if(zxObj[i]==1){
+						textzx='闲';
+						color = 'blue';
+					}	
+					if(i>=1001){
+						allSeatsdoubleplus += seats.replace('{i}', i).replace('{color}',color).replace('wager{i}','wager'+i).replace('sjzx{i}','sjzx'+i).replace('{textzx}', textzx).replace('{wager}', Obj[i]);
+					}
+				}
+				$("#desktop").append(allSeatsdoubleplus);
+				$('.loading').css('display','block');
+  				setTimeout(function(){
+  					$('.loading').css('display','none');
+  				},10)
+			});
+      		//点闲按钮时功能集合
+      		var xbtnT = 0;
+      		function xbtn(){
+      			xbtnT = xbtnT+1;//点击闲按钮的次数，点一次加1;
+				startCount();//计数投注总数
+				//符合此条件算命中(当差值上边为闲时说明闲多，算命中一次;)
+				var mNtext = $('#moreName').text();
+				if(mNtext=='闲'){
+					hit();
+				};
+				hitRate(hittimes); //计算命中率
+      			xcalc();//结果为闲时各个编号注数统计
+      			//$('.times').before('<span>选择:庄</span></br>');	
+      		}
+      		//点庄按钮时功能集合
+      		var zbtnT = 0;
+      		function zbtn(){
+      			zbtnT = zbtnT+1;
+				startCount();//计数投注总数
+				var mNtext = $('#moreName').text();
+				if(mNtext=='庄'){
+					hit();
+				};
+				hitRate(hittimes);//计算命中率
+      			zcalc();//结果为庄时各个编号注数统计
+      			//$('.times').before('<span>选择:闲</span></br>');   
+      		}
+		
+      		//输家翻倍
+      		function loser(codenumber){
+      			$("#"+"wager"+codenumber).text(Obj[codenumber]*2);
+      			Obj[codenumber] = parseFloat(Obj[codenumber]*2);
+      		};      		
+      		//赢家回到起点      		
+      		function winner(codenumber){
+      			Obj[codenumber] = initialValue;
+      			$("#"+"wager"+codenumber).text(initialValue);
+      			
+      		};
+      		//点闲时每个编号的当前下的注数
+      		function xcalc(){
+      			$('#more16lists').nextAll().remove();
+      			$('#morelistsplus').nextAll().remove();
+      			$('#morelists').nextAll().remove();
+      			//listsplus='';
+				//获取闲的编号将字符串转为数组
+	  			for(var i=0;i<xcodeTextArray.length;i++){
+	  				var Number = xcodeTextArray[i];
+	  				winner(Number);	//赢家回到起点
+//	  				if(pn<=10000){
+//	  					loserWin(Number);//16次没中17次中了在列表中清除这些id;	
+//	  				}	  				
+				}      			
+	  			for(var i=0;i<zcodeTextArray.length;i++){
+	  				var Number = zcodeTextArray[i];
+	  				var losertext ='庄';
+	  				loser(Number);   //输家翻倍
+	  				//console.log(pn);
+//	  				if(pn<=10000){
+//	  					loserest(Number,losertext,i);//输家-16次列表
+//	  				}
+				}
+				sloserest();
+//	  			if(pn>10000){
+//	  				sloserest();
+//	  			}
+	  			//sloserdisplay();
+	  			reszxSum();//获取庄闲总分数
+    			difference();//差值算法
+//  			$("#more16lists").removeAttr("disabled");//将按钮可用
+//  			$("#morelists").removeAttr("disabled");//将按钮可用
+//  			$("#morelistsplus").removeAttr("disabled");//将按钮可用				
+      		};
+      		//点庄时每个编号的当前下的注数
+      		function zcalc(){
+      			$('#more16lists').nextAll().remove();
+      			$('#morelistsplus').nextAll().remove();
+      			$('#morelists').nextAll().remove();
+      			//listsplus='';
+				//获取闲的编号将字符串转为数组
+	  			for(var i=0;i<xcodeTextArray.length;i++){
+	  				var Number = xcodeTextArray[i];
+	  				var losertext ='闲';
+	  				loser(Number);   //输家翻倍
+//	  				if(pn<=10000){
+//	  					loserest(Number,losertext,i);//输家-16次列表
+//	  				}
+				}      			
+	  			for(var i=0;i<zcodeTextArray.length;i++){
+	  				var Number = zcodeTextArray[i];
+	  				winner(Number);	//赢家回到起点	
+//	  				if(pn<=10000){
+//	  					loserWin(Number);//16次没中17次中了在列表中清除这些id;
+//	  				}
+				}
+				sloserest();
+//	  			if(pn>10000){
+//	  				sloserest();
+//	  			}
+	  			reszxSum();//获取庄闲总分数
+    			difference();//差值算法
+    			$("#more16lists").removeAttr("disabled");//将按钮可用
+    			$("#morelists").removeAttr("disabled");//将按钮可用
+    			$("#morelistsplus").removeAttr("disabled");//将按钮可用
+    			
+      		};      		
+   		
+      		//人数改变时，所有数据清零
+      		function restartF(){
+      			pnTime = 1;//请空设置按钮点击次数
+      			reT = 0;//请空重置按钮点击次数
+      			xbtnT = 0;//请空点闲按钮点击次数
+      			zbtnT = 0;//请空点庄按钮点击次数
+      			totalz = 0;   //累计庄总数
+      			totalx = 0;   //累计闲总数
+      			num = 0;    //累计投注数
+      			$('#desktop').text('请设置人数');
+      			Obj = {};  			
+      			initialValue = 1;
+      			hittimes =0;//命中次数清空
+      			var resTotalt = $('#totalt').text(num);
+      			var resHitRate =$('#hitRate').text('NaN');      			
+      			var resTotalz =$('#totalz').text(totalz);
+      			var resTotalx = $('#totalx').text(totalx);
+      			var resMoreName = $('#moreName').text('**');
+      			var resDvalue =$('#dvalue').text('0');
+      			$('#unlucky').html('<div class="wu">暂无数据</div>');
+      		};      		      		      		
+      		//16次列表，清除赢的编号
+	         function loserWin(id){
+	         	var listLen = $('#unlucky').find('.unlucky_box').length;
+	         	var Num = parseInt($('#totalt').text());
+	         	if(Num>=17){	         		
+	         		$('#more16lists').live('click',function(){
+	         			$('#more16lists').nextAll().remove();	         			
+	         		})
+	         		if(listLen>=1){
+		              $('#unlucky_box'+id+'').remove();
+		            }else{
+		              //$('.wu').show();
+		              //$('#more16lists').hide();
+		            }
+	         	}	           	            
+	          }
+      		//连续16次输的编号
+      		function loserest(id,losertext,itimes){
+      				//var initialNum = $('#initialValue').val();  //初始分数
+	      			var Num = parseInt($('#totalt').text());
+	      			if(Num>=16){
+	      				//翻倍翻出来的分数
+	      				var currentscroe  = Number(Obj[id])/initialValue;
+						var resultT =  Math.log(currentscroe)/Math.LN2;	
+						var fbTime = parseInt(resultT);//获取翻倍次数	
+						var lists='';
+						var listsplus='';
+						var more16text ='<button type="button" id="more16lists">↓点击查看更多</button>'
+						var list = '<div class="unlucky_box" id="unlucky_box{id}"><span>编号:{id}</span></br><span>选择:{losertext}</span></br><span class="times">次数:{resultT}次</span></div>';
+						if(fbTime>=16){
+							if(itimes<31){
+								lists += list.replace('unlucky_box{id}', 'unlucky_box'+id).replace('{id}',id).replace('{resultT}',fbTime).replace('{losertext}',losertext);							
+							}else{							
+								listsplus += list.replace('unlucky_box{id}', 'unlucky_box'+id).replace('{id}',id).replace('{resultT}',fbTime).replace('{losertext}',losertext);
+							}
+						};						
+						if(fbTime==16){							
+						     if(itimes<31){
+						     	$('#unlucky').append(lists);
+						     }else if(itimes=31){
+						     	$('#more16lists').remove();
+						     	$('#unlucky').append(more16text);						     	
+						     	$('#more16lists').live('click',function(){
+						     		$('#more16lists').attr({"disabled":"disabled"});
+						     		$('.loading').css('display','block');
+				      				setTimeout(function(){
+				      					$('.loading').css('display','none');
+				      				},10)
+				      				setTimeout(function(){
+				      					$('#unlucky').append(listsplus);
+				      					listsplus='';
+				      				},1);						     		
+						     	});
+						     } 						     	
+						     $('.wu').css('display','none');
+						}
+						if(fbTime>16){
+							$('#unlucky_box'+id).remove();
+							if(itimes<31){
+						     	$('#unlucky').append(lists);
+						    }else if(itimes=31){						     	
+						     	$('#more16lists').remove();
+						     	$('#unlucky').append(more16text);
+						     	$('#more16lists').live('click',function(){
+						     			$('#unlucky_box'+id).remove();	
+						     			$('#more16lists').attr({"disabled":"disabled"});						     			
+						     			$('.loading').css('display','block');
+					      				setTimeout(function(){
+					      					$('.loading').css('display','none');
+					      				},10)
+					      				setTimeout(function(){
+					      					$('#unlucky_box'+id).remove();
+					      					$('#unlucky').append(listsplus);
+					      					listsplus='';
+					      				},1);					     								     		
+						     	});
+						     } 		
+							$('.wu').css('display','none');														
+						}														
+	      			}
+      		};
+
+      		//10000人以上连续16次输的编号列表仅显示3个最高值
+      		function sloserest(){      				
+	      			var Num = parseInt($('#totalt').text());
+	      			if(Num>=16){
+						$('.wu').css('display','block');
+						$('.wu').nextAll().remove();
+	      				var sdic = Object.keys(Obj).sort(function(a, b) { 	      					 
+				             return Obj[b] - Obj[a]				             
+				        });
+				        var displayarray = sdic.slice(0,3);
+						var lists='';
+						var list = '<div class="unlucky_box" id="unlucky_box{id}"><span>编号:{id}</span></br><span>选择:{losertext}</span></br><span class="times">次数:{resultT}次</span></div>';
+	      				//截取排序后的数组的前三个;
+			            
+						var listArry = [];
+						//console.log(listArry);
+			            for(var i=0;i<displayarray.length;i++){              
+			              var idY = displayarray[i];
+			              var currentscroe  = Number(Obj[idY])/initialValue;
+			              var resultT =  Math.log(currentscroe)/Math.LN2;  
+			              var scroeTime = parseInt(resultT);//获取翻倍次数              
+			              if(scroeTime>=16){
+			                listArry.push(idY);
+			              }
+			              listArry.sort(function(a, b) {
+			                 return a - b             
+			              });              
+			            }
+			            for(var k=0;k<listArry.length;k++){
+			              
+			              var id = listArry[k];
+			              var losertext;
+							if(zxObj[id]==0){
+								losertext='庄';
+								//color = 'red';
+							}else if(zxObj[id]==1){
+								losertext='闲';
+								//color = 'blue';
+							}
+			              var currentscroe  = Number(Obj[id])/initialValue;
+			              var resultT =  Math.log(currentscroe)/Math.LN2;  
+			              var fbTime = parseInt(resultT);//获取翻倍次数    
+			              lists += list.replace('unlucky_box{id}', 'unlucky_box'+id).replace('{id}',id).replace('{resultT}',fbTime).replace('{losertext}',losertext);              
+			            }
+			            $('#unlucky').append(lists);
+			             $('.wu').css('display','none');
+			            lists = '';
+			            if(listArry.length==0){
+			              $('.wu').css('display','block');
+			            }					
+	      			}
+      		}; 
+      		//点击重置按钮,需要调用的重置获取庄,闲总分数
+      		function reszxSum(){      			
+      			//获取存储的，当局庄、闲编号
+				zScoreSum = 0;
+      		    xScoreSum = 0;				
+				//重置时获取相应的庄、闲总分数
+  				for(var k = 0; k<zcodeTextArray.length;k++){
+  					zScoreSum = zScoreSum+Obj[zcodeTextArray[k]];
+  					$('#totalz').text(zScoreSum.toFixed(2));
+  				}
+  				
+  				for(var j = 0; j<xcodeTextArray.length;j++){
+  					xScoreSum = xScoreSum+Obj[xcodeTextArray[j]];
+  					$('#totalx').text(xScoreSum.toFixed(2));
+  				}
+	      						
+      		}; 
+    		//庄闲总数差值
+      		function difference(){
+      			var z = $("#totalz").text();
+      			var x = $("#totalx").text();     			
+      			if(parseFloat(z) > parseFloat(x)){
+      				var dz = z-x;
+      				$('#moreName').html('<span class="red fb">庄</span>');
+      				$('#dvalue').text(dz.toFixed(2));  //保留2位小数
+      			}else if(parseFloat(z) < parseFloat(x)){
+      				var dx = x-z;
+      				$('#moreName').html('<span class="blue fb">闲</span>');
+      				$('#dvalue').text(dx.toFixed(2));  //保留2位小数
+      			}else{
+      				$('#moreName').text('差值');
+      				$('#dvalue').text(0);
+      			}
+      		};
+    		//累计投注次数统计
+      		var num=0;
+			function startCount() {							    
+			    num=num+1;
+			    $('#totalt').text(num);
+			};
+			//命中率
+			var hittimes =0;
+			function hit(){
+				hittimes = hittimes+1;
+			};
+			function hitRate(e){
+				var totalz = $('#totalt').text();				
+				var hitrate = (e/totalz)*100;
+				//Math.floor(hitrate)这是去掉小数点保留整数，Math.round(hitrate)这是四舍五入的整数
+				$('#hitRate').text(hitrate.toFixed(2));//.toFixed(2)保留小数点后两位
+			};
+			//扩展zepto的nextAll方法;
+			$.fn.nextAll = function (selector) {
+		      var nextEls = [];
+		      var el = this[0];
+		      if (!el) return $([]);
+		      while (el.nextElementSibling) {
+		        var next = el.nextElementSibling;
+		        if (selector) {
+		          if($(next).is(selector)) nextEls.push(next);
+		        }
+		        else nextEls.push(next);
+		        el = next;
+		      }
+		      return $(nextEls);
+		    };
+      	});
+      	mui.plusReady(function(){ 
+      		//保存累计投注数、命中率为应用本地数据
+      		function setItem(){
+				    var totalt = $("#totalt").text();
+				    var hitRate = $("#hitRate").text();
+				    plus.storage.setItem('totalt',totalt);
+				    plus.storage.setItem('hitRate',hitRate);
+			}
+      		//获取 累计投注数、命中率的本地存储的方法; 
+	  		function getItem(){
+	  			var savetotalt = plus.storage.getItem("totalt");
+	  			var savehitRate = plus.storage.getItem("hitRate");
+			    $("#totalt").text(savetotalt);
+			    $("#hitRate").text(savehitRate); 
+			}
+	  		//清除累计投注数、命中率的本地存储
+	  		function removeItem(){
+				plus.storage.removeItem("totalt");
+				plus.storage.removeItem("hitRate");
+			}
+	  		getItem();//调用累计投注数和命中率的本地存储方法;
+	  		var xian = document.getElementById('btnX');
+	  		var zhang = document.getElementById('btnZ');
+			xian.addEventListener('tap', function(event) {
+				setTimeout(function(){
+					setItem();//点闲保存或更新存储的数据
+				},2000)	
+			});
+			zhang.addEventListener('tap', function(event) {
+				setTimeout(function(){
+					setItem();//点闲保存或更新存储的数据
+				},2000)	
+			});
+			//刷新按钮
+      		$('#refresh').on('click',function(){
+      			removeItem();//清除本地存储
+      			window.location.reload();//刷新本页面      			
+      		})
+      		
+      	});
+    </script>	
+</body>
+</html>
